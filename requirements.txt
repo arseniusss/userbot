@@ -1,0 +1,4 @@
+emoji==2.8.0
+pymongo==4.5.0
+Requests==2.31.0
+Telethon==1.30.3
