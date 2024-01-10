@@ -13,7 +13,9 @@ from collections import defaultdict
 from PIL import Image
 import requests
 from io import BytesIO
-
+from typing import List
+from telethon import events
+from telethon.sync import events as sync_events
 
 
 #initializing mongo and user collection
@@ -22,7 +24,7 @@ userbots_collection = user_db['userbots_collection']
 
 NUMBER_OF_ACCOUNTS = len(ID_DICT.keys())
 
-clients_array = [TelegramClient(f"{i}", ID_DICT[f"{i}"]["api_id"], ID_DICT[f"{i}"]["api_hash"]) for i in range(1, NUMBER_OF_ACCOUNTS+1)]
+clients_array: List[TelegramClient] = [TelegramClient(f"{i}", ID_DICT[f"{i}"]["api_id"], ID_DICT[f"{i}"]["api_hash"]) for i in range(1, NUMBER_OF_ACCOUNTS+1)]
 print(f"{len(clients_array)} клієнтів ТГ завантажено")
 COMMANDS_WITH_ONE_ANSWER_MESSAGE = ["status", "guards", "info", "chats", "stats"]
 WINESRA_COMMANDS = ["addchat", "addadmin", "add_guard_chat", "guard"]
@@ -36,36 +38,30 @@ async def buy_something_in_shop(client_index, stuff_to_buy, quantity: int = 1):
         # TODO: перевірки
         client = clients_array[client_index]
         response = await client.get_messages(RANDOMBOT_ID, from_user=RANDOMBOT_ID, search='Горілка "Козаки"', limit=1)
-        if hasattr(response[0].reply_markup, 'rows'):
-            for row in response[0].reply_markup.rows:
-                for button in row.buttons:
-                    if "☢ 5 - 💵 12" in button.text:
-                        try:
-                            await client(GetBotCallbackAnswerRequest(
-                                response[0].chat_id,
-                                response[0].id,
-                                data=button.data
-                            ))
-                            return
-                        except BotResponseTimeoutError:
-                            pass
+        if response[0].reply_markup is not None and hasattr(response[0].reply_markup, 'rows'):
+            try:
+                await client(GetBotCallbackAnswerRequest(
+                    response[0].chat_id,
+                    response[0].id,
+                    data='5_vodka'
+                ))
+                return
+            except BotResponseTimeoutError:
+                pass
     elif stuff_to_buy == "хп":
         # TODO: перевірки
         client = clients_array[client_index]
         response = await client.get_messages('RandomUA3bot', from_user=RANDOMBOT_ID, search='Горілка "Козаки"', limit=1)
         if response[0].reply_markup is not None and hasattr(response[0].reply_markup, 'rows'):
-            for row in response[0].reply_markup.rows:
-                for button in row.buttons:
-                    if "Аптечка" in button.text:
-                        try:
-                            await client(GetBotCallbackAnswerRequest(
-                                response[0].chat_id,
-                                response[0].id,
-                                data=button.data
-                            ))
-                            return
-                        except BotResponseTimeoutError:
-                            pass
+            try:
+                await client(GetBotCallbackAnswerRequest(
+                    response[0].chat_id,
+                    response[0].id,
+                    data='aid_kit'
+                ))
+                return
+            except BotResponseTimeoutError:
+                pass
        
 
 async def get_battle_message(chat, client):
@@ -147,7 +143,7 @@ def rusak_stats_map(text: str) -> dict[str, int]:
 
 
 
-async def filter_toggle(toggle_parameter: str, toggle_value: str, chat_id, client_index):
+async def filter_toggle(toggle_parameter: str, toggle_value: str, chat_id, client_index) -> str:
     user_doc = userbots_collection.find_one(
         {
             'index': client_index,
@@ -161,9 +157,11 @@ async def filter_toggle(toggle_parameter: str, toggle_value: str, chat_id, clien
         elif toggle_value == "off" and chat_id in toggle_arr:
             toggle_arr.remove(chat_id)
         elif toggle_value == "idk":
+            return_value = "on"
             if chat_id not in toggle_arr:
                 toggle_arr.append(chat_id)
             else:
+                return_value = "off"
                 toggle_arr.remove(chat_id)
     userbots_collection.find_one_and_update(
         {
@@ -175,6 +173,8 @@ async def filter_toggle(toggle_parameter: str, toggle_value: str, chat_id, clien
             }
         }
     )
+    if toggle_value=='idk':
+        return return_value
 
 
 async def determine_clients_to_respond(event, client_index) -> list[int]:
@@ -220,22 +220,67 @@ async def determine_clients_to_respond(event, client_index) -> list[int]:
 
     return [0]
 
+
 async def handle_filters(event, client_index: int):
     # TODO: п'ятихвилинна затримка перед тим, як спробувати взяти лут 
     if event.message.from_id is None:
         return
 
     user_doc = userbots_collection.find_one(
-        {
-            'index': client_index,
-        }
+        {'index': client_index},
     )
+
 
     if (user_doc and event.message.chat_id not in user_doc['chats_allowed']):
         return
     message_recieved = event.message
     
-    if "Починається міжчатова битва" in message_recieved.text and message_recieved.chat_id in user_doc.get('auto_war', []):
+    if "Додатковий гумконвой вже в дорозі!" in message_recieved.text and message_recieved.chat_id == user_doc.get('convoys_observe_chat', 0) and message_recieved.from_id.user_id == RANDOMBOT_ID:
+        try:
+            print(message_recieved.from_id.user_id)
+            convoy_limit = user_doc.get("convoys_limit", 2)
+            current_convoys = user_doc.get("number_convoys", 0)
+            snatch_message_id = user_doc.get("last_raid_id", 0)
+            chat_to_observe = user_doc.get("convoys_observe_chat", None)
+
+            if current_convoys+1>=convoy_limit:                          
+                try:
+                    await clients_array[client_index](GetBotCallbackAnswerRequest(
+                            chat_to_observe,
+                            snatch_message_id,
+                            data='raid_join'
+                        )
+                    )
+                except Exception:
+                    pass
+                    
+            userbots_collection.find_one_and_update(
+                {
+                    'index': client_index, 
+                },
+                {
+                    "$inc": {
+                        "number_convoys": 1,  
+                    }
+                },
+            )
+            return
+        except Exception:
+            pass
+    
+    elif "Гумконвой розграбовано" in message_recieved.text and message_recieved.chat_id == user_doc.get('convoys_observe_chat', None) and message_recieved.from_id.user_id == RANDOMBOT_ID:
+        userbots_collection.find_one_and_update(
+            {
+                'index': client_index, 
+            },
+            {
+                "$set": {
+                    "number_convoys": 0,  
+                }
+            }
+        )
+        return
+    if "Починається міжчатова битва" in message_recieved.text and message_recieved.chat_id in user_doc.get('auto_war', []) :
         try:
             await buy_something_in_shop(client_index, "бд")
             await clients_array[client_index].send_message(message_recieved.chat_id, "Я купив горілку")
@@ -267,28 +312,36 @@ async def handle_filters(event, client_index: int):
                         "index": client_index,
                     },
                     {
-                        "$set":{
+                        "$set": {
                             "last_battle_id": message_recieved.id,
                         }
                     }
                 )
-                #TODO: якийсь нормальний вивід sleep
+                
                 await asyncio.sleep(sleep + random.random()*0.4)
-                for row in message_recieved.reply_markup.rows:
-                    for button in row.buttons:
-                        if "на бій" in button.text:                          
-                            await clients_array[client_index](GetBotCallbackAnswerRequest(
-                                message_recieved.chat_id,
-                                message_recieved.id,
-                                data=button.data
-                            ))
-                            return
+                await clients_array[client_index](GetBotCallbackAnswerRequest(
+                    message_recieved.chat_id,
+                    message_recieved.id,
+                    data='join'
+                ))
+                return
         except Exception as e:
             pass
     
-    if "Починається рейд" in message_recieved.text and message_recieved.chat_id in user_doc.get('auto_raid', []):
+    if "Починається рейд" in message_recieved.text and message_recieved.from_id.user_id == RANDOMBOT_ID:
         try:
-            if message_recieved.reply_markup is not None and hasattr(message_recieved.reply_markup, 'rows'):
+            if message_recieved.chat_id == user_doc.get("convoys_observe_chat", -1001973237747):
+                userbots_collection.find_one_and_update(
+                {
+                    "index": client_index,
+                },
+                {
+                    "$set": {
+                        "last_raid_id": message_recieved.id,
+                        }
+                    }
+                )
+            if message_recieved.chat_id in user_doc.get('auto_raid', []) and message_recieved.reply_markup is not None and hasattr(message_recieved.reply_markup, 'rows'):
                 for row in message_recieved.reply_markup.rows:
                     for button in row.buttons:
                         if "на рейд" in button.text:                          
@@ -296,7 +349,7 @@ async def handle_filters(event, client_index: int):
                             await clients_array[client_index](GetBotCallbackAnswerRequest(
                                 message_recieved.chat_id,
                                 message_recieved.id,
-                                data=button.data
+                                data='raid_join'
                             ))
                             return
         except Exception as e:
@@ -309,8 +362,11 @@ async def handle_filters(event, client_index: int):
         return
     if "Проведено рейд" in message_recieved.text or "Русаки приїхали грабувати" in message_recieved.text:
         if message_recieved.chat_id in user_doc.get("auto_start_raid", []):
-            await clients_array[client_index].send_message(message_recieved.chat_id, '/raid', schedule=timedelta(seconds=3620))
-        elif message_recieved.chat_id in user_doc.get("auto_loot", []):
+            if "наступний рейд" in message_recieved.text or "реванш" in message_recieved.text:
+                await clients_array[client_index].send_message(message_recieved.chat_id, '/raid')
+            else:
+                await clients_array[client_index].send_message(message_recieved.chat_id, '/raid', schedule=timedelta(seconds=3600 + random.randint(10, 20)))
+        if message_recieved.chat_id in user_doc.get("auto_loot", []):
             print(client_index)
             if message_recieved.reply_markup is not None and hasattr(message_recieved.reply_markup, 'rows'):
                 for row in message_recieved.reply_markup.rows:
@@ -325,11 +381,10 @@ async def handle_filters(event, client_index: int):
                         except Exception as e:
                             pass
                 await clients_array[client_index].send_message(message_recieved.chat_id, '+', reply_to=message_recieved.id) 
+                if any(item in message_recieved.text for item in ['🍝', '🍛', '🍜', '🥗', '🌭']):
+                    await clients_array[client_index].send_message(event.message.chat_id, '/feed')
 
 async def message_handler(event, client_index: int):
-    # TODO: додати можливість відкладати повідомлення на скількись днів/годин/хвилин/секунд
-
-    #TODO: команда help
     global COMMANDS_WITH_ONE_ANSWER_MESSAGE, ME_ARR, WINESRA_ID
     message_recieved = event.message
     await handle_filters(event, client_index)
@@ -446,29 +501,24 @@ async def message_handler(event, client_index: int):
             message_to_send+=";"
             await clients_array[bots_to_respond[0]].send_message(message_recieved.chat_id, message_to_send, reply_to=message_recieved.id)
 
-        elif message_args[1] == "gift":
-            if client_index!= bots_to_respond[0]:
-                return
-            for _ in range(int(message_args[2])):
-                await clients_array[client_index].send_message(RANDOMBOT_ID, '/gift')
-                await asyncio.sleep(0.2+random.random()*0.3)
-                """ random_messages = await clients_array[client_index].get_messages(RANDOMBOT_ID, limit=1)
-                for message in random_messages:
-                    try:
-                        if message.reply_markup is not None and hasattr(message.reply_markup, 'rows'):
-                            for row in message.reply_markup.rows:
-                                for button in row.buttons:
-                                    if button.text == "Так":                          
-                                        await clients_array[client_index](GetBotCallbackAnswerRequest(
-                                            message.chat_id,
-                                            message.id,
-                                            data=button.data
-                                        ))
-                                        return
-                    except Exception as e:
-                        pass     """
-                    
-
+        elif message_args[1] == "observe_convoys":
+            for i in bots_to_respond:
+                user_doc = userbots_collection.find_one(
+                    {
+                        'index': i,
+                    }
+                )
+                if user_doc is not None:
+                    userbots_collection.find_one_and_update(
+                        {
+                            'index': i,
+                        },
+                        {
+                            "$set": {
+                                'convoys_observe_chat': event.chat_id,
+                            }   
+                        }
+                    )
         elif message_args[1] == "addchat":
             # TODO: все те саме, тільки з remove
             botsadded = len(bots_to_respond)
@@ -640,8 +690,26 @@ async def message_handler(event, client_index: int):
             await asyncio.sleep(0.5)
             await clients_array[bots_to_respond[0]].send_message(event.message.chat_id, response_message)
         
-        elif message_args[1] in ["war", "battle", "loot", "start_war", "start_battle", "raid", "start_raid", "battle_sleep"]:
+        elif message_args[1] in ["war", "battle", "loot", "start_war", "start_battle", "raid", "start_raid", "battle_sleep", "count_convoys", "makima_mode", "convoys_limit"]:
             "🌐⚔️🎰"
+            single_bot = len(bots_to_respond)==1
+
+            def get_toggle_responses(key: str, single_bot:bool = False) -> str:
+                toggle_responses = {
+                    "war": f"заходитим{'е' if single_bot else 'уть'} в міжчатові битви автоматично🌐",
+                    "start_war": f"починатим{'е' if single_bot else 'уть'} міжчатові битви автоматично🌐(🔄)",
+                    "battle": f"заходитим{'е' if single_bot else 'уть'} в масові битви автоматично⚔️",
+                    "start_battle": f"починатим{'е' if single_bot else 'уть'} міжчатові битви автоматично⚔️(🔄)",
+                    "raid": f"заходитим{'е' if single_bot else 'уть'} в рейди автоматично💰",
+                    "start_raid": f"починатим{'е' if single_bot else 'уть'} рейди автоматично💰(🔄)",
+                    "makima_mode": f"пиздитим{'е' if single_bot else 'уть'} конвої автоматично🚛",
+                    "loot": f"пиздитим{'e' if single_bot else 'уть'} лут автоматично",
+                }
+
+                return toggle_responses[key]
+
+            response_message = f"Фільтри змінено: бот {'#' if len(bots_to_respond) == 1 else 'и'}"
+
             if message_args[1] == "battle_sleep":
                 for i in bots_to_respond:
                     user_doc = userbots_collection.find_one(
@@ -660,16 +728,45 @@ async def message_handler(event, client_index: int):
                                 }
                             }
                         )
-                        pass  
+                response_message+=f"{', '.join(map(str, [bot+1 for bot in bots_to_respond]))} чекатим{'е' if single_bot else 'уть'} {float(message_args[2])}⏳ секунд(и) перед тим, як заходити в масову битву в цьому чаті."
                 
-                return
-            for i in bots_to_respond:
+            
+            elif message_args[1] == 'convoys_limit':
+                for i in bots_to_respond:
+                    userbots_collection.find_one_and_update(
+                        {
+                            'index': i,
+                        },
+                        {
+                            "$set": {
+                                "convoys_limit": int(message_args[2]),
+                            }
+                        }
+                    )
+                response_message+=f"{', '.join(map(str, [bot+1 for bot in bots_to_respond]))} автоматично заходитим{'е' if single_bot else 'уть'} в рейд після того, як буде покликано {int(message_args[2])} гумконво{'й' if int(message_args[2]) == 1 else 'я'}🚛."
+
+            else:
                 toggle_parameter = message_args[1]
                 toggle_value = "idk" if len(message_args) == 2 else message_args[2]
-                await filter_toggle("auto_" + toggle_parameter, toggle_value, event.message.chat_id, i)
-            await clients_array[bots_to_respond[0]].send_message(event.message.chat_id, "Фільтри змінено")
+                if toggle_value!="idk":
+                    response_message+=f"{', '.join(map(str, [bot+1 for bot in bots_to_respond]))} тепер {'НЕ ' if toggle_value=='off' else ''}{get_toggle_responses(toggle_parameter, len(bots_to_respond)==1)}"
+                else:
+                    response_message = f"Фільтри змінено:"
+                toggled_dict = defaultdict(list)
+                for i in bots_to_respond:
+                    toggle_result = await filter_toggle("auto_" + toggle_parameter, toggle_value, event.message.chat_id, i)
+                    if toggle_value == "idk":
+                        toggled_dict[toggle_result].append(i)
+
+                for key, value in toggled_dict.items():
+                    if len(value):
+                        response_message+=f"\nбот{'и ' if len(value)!=1 else f'#'}{','.join(map(str, [v+1 for v in value]))} тепер {'НЕ ' if key=='off' else ''}{get_toggle_responses(toggle_parameter, len(value)==1)};" 
+            
+            await clients_array[bots_to_respond[0]].send_message(event.message.chat_id, response_message, reply_to=event.message.id)
         
         elif message_args[1] == "filters":
+            #TODO: якийсь нормальний /i
+            #TODO: admins
             # TODO: норм оформлення, щоб автоматично викликалось тільки для .cl
             title_chat = await clients_array[0].get_entity(event.message.chat_id)
             title_chat = title_chat.title
@@ -688,11 +785,13 @@ async def message_handler(event, client_index: int):
                 response_message+="💰" if event.message.chat_id in user_doc.get("auto_raid", []) else ""
                 response_message+="(🔄)" if event.message.chat_id in user_doc.get("auto_start_raid", []) else ""
                 response_message+="🎰" if event.message.chat_id in user_doc.get("auto_loot", []) else ""
+                response_message+="🚛" if event.message.chat_id in user_doc.get("auto_makima_mode", []) else ""
+                response_message+=f"({user_doc.get('convoys_limit', 2)})" if event.message.chat_id in user_doc.get("auto_makima_mode", []) else ""
                 response_message+="\n"
             
             await clients_array[bots_to_respond[0]].send_message(event.message.chat_id, response_message)
         
-        if message_args[1] in ["клік", "тиць", ".", "👉", "☝️", "👆"]:
+        elif message_args[1] in ["клік", "тиць", ".", "👉", "☝️", "👆"]:
             # TODO: розширити заборонені слова
             # TODO: багатопоточність сюди
             # TODO: дуелі, турніри
@@ -739,7 +838,15 @@ async def message_handler(event, client_index: int):
                                 await asyncio.sleep(0.05)
                             except Exception as e:
                                 pass
-            
+        elif message_args[1] in ["set_raid", "set_r", 'r']:
+            if client_index != bots_to_respond[0]:
+                return
+            for i in bots_to_respond:
+                user_doc=userbots_collection.find_one(
+                    {
+                    'index':i,
+                    }
+                )
 
     else:
         user_ids = await get_first_bots_that_are_in_channel(client_index, event.message.chat_id)
@@ -750,13 +857,10 @@ async def message_handler(event, client_index: int):
             return
         
         if message_recieved.text == ".тривога":
-            # Download the image
             response = requests.get("http://alerts.com.ua/map.png")
             
-            # Open the image using Pillow
             image = Image.open(BytesIO(response.content))
             
-            # Save the image in PNG format
             png_image_path = "image.png"
             image.save(png_image_path, "PNG")
             
@@ -887,7 +991,6 @@ async def message_handler(event, client_index: int):
                     "index": client_index,
                 }
             )
-            # TODO: "можна починати рейд" після реваншу
             ids_to_delete = user_doc.get("last_battle_id", 100)
             old_battle_msg = await clients_array[bots_to_respond[0]].get_messages(chat, ids=ids_to_delete)
             await old_battle_msg.delete()
@@ -896,6 +999,70 @@ async def message_handler(event, client_index: int):
             await clients_array[bots_to_respond[0]].send_message(event.message.chat_id, "/battle")
             await asyncio.sleep(0.4+random.random()*0.6)
             await clients_array[bots_to_respond[0]].send_message(event.message.chat_id, "/battle")
+        elif message_recieved.text in [".raid", '.r']:
+            if client_index != user_ids[0]:
+                return
+            user_doc = userbots_collection.find_one(
+                {
+                    'index': client_index,
+                }
+            )
+            last_raid = user_doc.get('last_raid_id', None)
+            await clients_array[user_ids[0]].send_message(event.message.chat_id, "Останній рейд був тут", reply_to=last_raid)
+        elif message_recieved.text in [".help", ".h", "хелп", "допомога", "домопожіть"]:
+            message_to_send = '''**Меню команд**
+            \n🌐Команди, які не потребують зазначення індекса бота🌐:
+            •`.status` - список ботів з назвами та індексами, увімкнені позначені зеленим;
+            •`.chats` - список чатів, звідки боти кличуть гумконвої;
+            •`.guards` - статус доступності гумконвоїв (зелене - доступний);
+            •`.info` - поточні активності чату з посиланнями;
+            •`.тривога` - тривога (кривий код, фіксити не хочу);
+            •`.raid` - останній рейд цього чату;
+            \n**👉Як звернутись до ботів?👈**
+            Усі команди починаються з префікса - . Після цього можна зазначити:
+            •одне число (приклад .1 команда) - єдиний бот;
+            •два числа через - тире (приклад: .2-6) - всі з проміжку від 1-го до 2-го числа;
+            •числа,через,кому (приклад: .1,4,9) - всі перелічені боти;
+            •.cl (приклад: .cl хп) - всі боти клану;         
+            •.all (приклад: .all бд) - всі боти одразу;
+            \n📋**Перелік команд📋**
+            •клік/тиць/. (приклад: .1 клік) - тикнути на кнопку. Приклад: `.2 клік 3 4` - клікне на 4-ту кнопку 3-го ряду. 3 і 4 - небов'язкові аргументи. Якщо не вказати 3, шукатиме 1 кнопку в 1 ряді, якщо не вказати 4 - шукатиме 1 кнопку в 3 ряді;
+            •rusak/русак/r (приклад: .all r) - обрані русаки та їх стати;
+            •account/acc/a (приклад: .all a) - аккаунти русаків;
+            •class (приклад: .1-3 class) - класи всіх русаків;
+            •бд (приклад: .1 бд) - закупити бойовий дух (5 пляшок горілки);
+            •хп (приклад: .cl хп) - закупити хп (одна аптечка);
+            •guard (приклад: .9-10 guard) - покликати гумконвой. Само перевірить, чи обраний генерал;
+            •/інші_команди (команди рандомбота) можна відправити одразу після /. Приклад: (.1 /i);
+            \n🔍**Фільтри🔍**
+            Щоб змінити фільтр, треба надіслати: .1 (назва фільтра) on/off/нічого. Якщо нічого не вказати, то зміниться з true на false і навпаки.
+            •war - автозахід в міжчати;
+            •start_war - автоматичний старт міжчатів;
+            •battle - автозахід в битви;
+            •start_battle - автоматичний старт масових битв;
+            •raid - автозахід в рейд;
+            •start_raid - автоматичний старт рейдів;
+            •loot - автоматична крадіжка луту(має поставити + після крадіжки);
+            •battle_sleep - затримка перед тим, як зайти в битву (приклад: .3 battle_sleep 0.5);
+            •makima_mode - дозволити боту автоматично заходити в рейд після того, як пустять гумконвой (приклад: .1 makima_mode on);
+            •convoys_limit - після якого числа пущених конвоїв бот зайде в рейд (приклад: .1 convoys_limit 2);
+            '''
+            await clients_array[bots_to_respond[0]].send_message(event.message.chat_id, message_to_send, reply_to=event.message.id, parse_mode="md")
+
+        elif message_recieved.text in ["конвой", "камвой", ".convoy"]:
+            user_doc = userbots_collection.find_one(
+                {
+                    'index': user_ids[0],
+                }
+            )
+            chat_to_observe = user_doc.get("convoys_observe_chat", None)
+            number_convoys = user_doc.get("number_convoys", 0)
+            convoy_looted_msd = await clients_array[user_ids[0]].get_messages(chat_to_observe, search='Гумконвой розграбовано', from_user=RANDOMBOT_ID)
+            for msg in convoy_looted_msd:
+                id = msg.id
+            
+            await clients_array[0].send_message(event.message.chat_id, f"Я нарахував {number_convoys} конвоїв, розграбували тут.", reply_to=id)   
+
             
 
 async def delete_old_messages():
@@ -929,6 +1096,65 @@ async def delete_old_messages():
     except Exception as e:
         pass
 
+async def count_convoys_and_start_raid():
+    for i in range(NUMBER_OF_ACCOUNTS):
+        user_doc = userbots_collection.find_one(
+            {
+                'index': i,
+            }
+        )
+        if user_doc is not None:
+            chats_to_count_convoys_in = user_doc.get("auto_count_convoys", [])
+            chat_to_observe = user_doc.get("convoys_observe_chat", None)
+            if chat_to_observe is not None:
+                convoy_looted_msd = await clients_array[i].get_messages(chat_to_observe, search='Гумконвой розграбовано', from_user=RANDOMBOT_ID)
+                for msg in convoy_looted_msd:
+                    convoy_id = msg.id
+                
+                add_convoy_msgs = await clients_array[i].get_messages(chat_to_observe, search='Додатковий гумконвой', from_user=RANDOMBOT_ID, min_id=convoy_id)
+                
+                userbots_collection.find_one_and_update(
+                    {
+                        'index': i,
+                    },
+                    {
+                        "$set": {
+                            "number_convoys": len(add_convoy_msgs),
+                        }
+                    }
+                )
+                # await clients_array[i].send_message(chat_to_observe, f"Я нарахував {len(add_convoy_msgs)} конвоїв, розграбували тут.", reply_to=convoy_id)
+
+                
+                last_raid_id = user_doc.get("last_raid_id", 0)
+                raid_msgs = await clients_array[i].get_messages(chat_to_observe, search='Починається рейд...', from_user=RANDOMBOT_ID, min_id=last_raid_id)
+                
+                if len(raid_msgs) !=0:
+                    for mesg in raid_msgs:
+                        last_raid_id = max(mesg.id, last_raid_id)
+                
+                    await asyncio.sleep(1)
+                    userbots_collection.find_one_and_update(
+                        {
+                            "index": i,
+                        },
+                        {
+                            "$set": {
+                                "last_raid_id": last_raid_id,
+                                }
+                            }
+                        )
+                
+                #await clients_array[i].send_message(chat_to_observe, f"Останній рейд був тут", reply_to=last_raid_id)
+            
+        #FIXME: якусь перевірку того, чи не висить рейд вже, і мб видалити попередній
+        start_raid_arr = user_doc.get('auto_start_raid', [])
+        print(i, start_raid_arr)
+        if start_raid_arr:
+            for idx in start_raid_arr:
+                await clients_array[i].send_message(idx, '/raid')
+                
+    pass
 async def background_task():
     while True:
         await delete_old_messages()
@@ -945,11 +1171,16 @@ async def start_clients():
     await asyncio.gather(*tasks)
     ME_ARR = [await client.get_me() for client in clients_array]
     print(f"{len(ME_ARR)} клієнтів ТГ .get_me() завантажено")
+    # tasks = []
+    # bg_task = asyncio.ensure_future(background_task())
+    # tasks.append(bg_task)
+    # await asyncio.gather(*tasks)
     tasks = []
-    bg_task = asyncio.ensure_future(background_task())
-    tasks.append(bg_task)
-    await asyncio.gather(*tasks)
-    
+    convoy_startup = asyncio.ensure_future(count_convoys_and_start_raid())
+    tasks.append(convoy_startup)
+    await asyncio.gather(*tasks)   
+
+
 async def main():
     global ME_ARR
     await start_clients()
