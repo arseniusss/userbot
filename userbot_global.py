@@ -1,4 +1,4 @@
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, types
 from telethon.tl.functions.messages import GetBotCallbackAnswerRequest
 from telethon.errors.rpcerrorlist import BotResponseTimeoutError
 import asyncio
@@ -10,13 +10,18 @@ import random
 import requests
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+from PIL import Image
+import requests
+from io import BytesIO
+
 
 
 #initializing mongo and user collection
 user_db = mongo_client['my_userbots_db']
 userbots_collection = user_db['userbots_collection']
 
-NUMBER_OF_ACCOUNTS = 10
+NUMBER_OF_ACCOUNTS = len(ID_DICT.keys())
+
 clients_array = [TelegramClient(f"{i}", ID_DICT[f"{i}"]["api_id"], ID_DICT[f"{i}"]["api_hash"]) for i in range(1, NUMBER_OF_ACCOUNTS+1)]
 print(f"{len(clients_array)} клієнтів ТГ завантажено")
 COMMANDS_WITH_ONE_ANSWER_MESSAGE = ["status", "guards", "info", "chats", "stats"]
@@ -174,6 +179,10 @@ async def filter_toggle(toggle_parameter: str, toggle_value: str, chat_id, clien
 
 async def determine_clients_to_respond(event, client_index) -> list[int]:
     message = event.message
+    if not hasattr(event.message, 'text'):
+        return []
+    if len(event.message.text) <= 1:
+        return []
     if message.text[1:] in COMMANDS_WITH_ONE_ANSWER_MESSAGE:
         id = await get_first_bots_that_are_in_channel(client_index, event.message.chat_id)
         return list(id)
@@ -302,6 +311,7 @@ async def handle_filters(event, client_index: int):
         if message_recieved.chat_id in user_doc.get("auto_start_raid", []):
             await clients_array[client_index].send_message(message_recieved.chat_id, '/raid', schedule=timedelta(seconds=3620))
         elif message_recieved.chat_id in user_doc.get("auto_loot", []):
+            print(client_index)
             if message_recieved.reply_markup is not None and hasattr(message_recieved.reply_markup, 'rows'):
                 for row in message_recieved.reply_markup.rows:
                     for button in row.buttons:
@@ -740,13 +750,22 @@ async def message_handler(event, client_index: int):
             return
         
         if message_recieved.text == ".тривога":
-            image_url = "http://alerts.com.ua/map.png"
-            response = requests.get(image_url)
+            # Download the image
+            response = requests.get("http://alerts.com.ua/map.png")
             
-            with open("map.png", "wb") as f:
-                f.write(response.content)
+            # Open the image using Pillow
+            image = Image.open(BytesIO(response.content))
             
-            await clients_array[user_ids[0]].send_file(event.message.chat_id, "map.png")
+            # Save the image in PNG format
+            png_image_path = "image.png"
+            image.save(png_image_path, "PNG")
+            
+            # Send the PNG image
+            await clients_array[0].send_file(
+                event.message.chat_id,
+                png_image_path,
+                background=False,
+            )
 
         elif message_recieved.text == ".guards":
             message_to_send = "Статус доступності /guard:\n"
@@ -754,8 +773,8 @@ async def message_handler(event, client_index: int):
             available = 0
             async def get_guard_info(client_index: int, result_dict: dict) -> None:
                 await clients_array[client_index].send_message(RANDOMBOT_ID, '/status')
-                await asyncio.sleep(0.5)
-                random_messages = await clients_array[client_index].get_messages(RANDOMBOT_ID, from_user=RANDOMBOT_ID, search="Дуелі:", limit=1)
+                await asyncio.sleep(0.7)
+                random_messages = await clients_array[client_index].get_messages(RANDOMBOT_ID, from_user=RANDOMBOT_ID, search="/daily", limit=1)
                 for message in random_messages:
                     result_dict[client_index] = "🟢" if "🟥 /work" in message.text else "🔴"
                 
