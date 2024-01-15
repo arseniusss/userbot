@@ -32,7 +32,7 @@ async def buy_sugar(myclient: TelegramClient, randombot_id: int|str):
     await asyncio.sleep(0.5)
     await myclient.send_message(randombot_id, '/clan_shop')
     await asyncio.sleep(0.5)
-    random_messages = await myclient.get_messages(RANDOMBOT_ID, limit=2)
+    random_messages = await myclient.get_messages(RANDOMBOT_ID, search='Список доступних товарів')
     for message in random_messages:
         if "🏬 Список доступних товарів:" in message.text:
             if hasattr(message.reply_markup, 'rows'):

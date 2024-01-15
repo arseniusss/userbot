@@ -1,3 +1,4 @@
-*.session-journal
-*.session
 userbot_settings.py
+sessions.txt
+*.tar
+1_winesra.py

@@ -1,30 +1,36 @@
-from telethon import TelegramClient, events, types
+from telethon import TelegramClient, events
 from telethon.tl.functions.messages import GetBotCallbackAnswerRequest
 from telethon.errors.rpcerrorlist import BotResponseTimeoutError
+from telethon.tl.types import InputChannel, InputPeerChat
 import asyncio
-from userbot_settings import ID_DICT, mongo_client, WINESRA_ID
 from pymongo import MongoClient, ASCENDING, DESCENDING
 import emoji
 import re
 import random 
-import requests
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from collections import defaultdict
-from PIL import Image
-import requests
-from io import BytesIO
 from typing import List
-from telethon import events
-from telethon.sync import events as sync_events
+from userbot_settings import ID_DICT, mongo_client, WINESRA_ID
+from telethon.sessions import StringSession
 
 
-#initializing mongo and user collection
 user_db = mongo_client['my_userbots_db']
 userbots_collection = user_db['userbots_collection']
 
 NUMBER_OF_ACCOUNTS = len(ID_DICT.keys())
 
-clients_array: List[TelegramClient] = [TelegramClient(f"{i}", ID_DICT[f"{i}"]["api_id"], ID_DICT[f"{i}"]["api_hash"]) for i in range(1, NUMBER_OF_ACCOUNTS+1)]
+clients_array: List[TelegramClient] = []
+with open('sessions.txt', 'r', encoding='utf-8') as session_file:
+    for i in range(1, NUMBER_OF_ACCOUNTS+1):
+        session_str = session_file.readline().replace('\n', '')
+        clients_array.append(TelegramClient(StringSession(session_str), ID_DICT[f"{i}"]["api_id"], ID_DICT[f"{i}"]["api_hash"]))
+
+# clients_array: List[TelegramClient] = [TelegramClient(f"{i}", ID_DICT[f"{i}"]["api_id"], ID_DICT[f"{i}"]["api_hash"]) for i in range(1, NUMBER_OF_ACCOUNTS+1)]
+# with open('sessions.txt', 'w', encoding='utf-8') as file:
+#     for client in clients_array:
+#         data = StringSession.save(client.session)
+#         file.write(data+'\n') 
+
 print(f"{len(clients_array)} клієнтів ТГ завантажено")
 COMMANDS_WITH_ONE_ANSWER_MESSAGE = ["status", "guards", "info", "chats", "stats"]
 WINESRA_COMMANDS = ["addchat", "addadmin", "add_guard_chat", "guard"]
@@ -32,7 +38,7 @@ ME_ARR = []
 RANDOMBOT_ID = 6277866886
 BUY_OPTIONS = ["хп", "бд"] 
 
-async def buy_something_in_shop(client_index, stuff_to_buy, quantity: int = 1):
+async def buy_something_in_shop(client_index: int, stuff_to_buy: str, quantity: int = 1):
     # TODO: додати ще щось для закупівлі
     if stuff_to_buy == "бд":
         # TODO: перевірки
@@ -237,7 +243,6 @@ async def handle_filters(event, client_index: int):
     
     if "Додатковий гумконвой вже в дорозі!" in message_recieved.text and message_recieved.chat_id == user_doc.get('convoys_observe_chat', 0) and message_recieved.from_id.user_id == RANDOMBOT_ID:
         try:
-            print(message_recieved.from_id.user_id)
             convoy_limit = user_doc.get("convoys_limit", 2)
             current_convoys = user_doc.get("number_convoys", 0)
             snatch_message_id = user_doc.get("last_raid_id", 0)
@@ -366,6 +371,7 @@ async def handle_filters(event, client_index: int):
                 await clients_array[client_index].send_message(message_recieved.chat_id, '/raid')
             else:
                 await clients_array[client_index].send_message(message_recieved.chat_id, '/raid', schedule=timedelta(seconds=3600 + random.randint(10, 20)))
+        
         if message_recieved.chat_id in user_doc.get("auto_loot", []):
             print(client_index)
             if message_recieved.reply_markup is not None and hasattr(message_recieved.reply_markup, 'rows'):
@@ -792,9 +798,6 @@ async def message_handler(event, client_index: int):
             await clients_array[bots_to_respond[0]].send_message(event.message.chat_id, response_message)
         
         elif message_args[1] in ["клік", "тиць", ".", "👉", "☝️", "👆"]:
-            # TODO: розширити заборонені слова
-            # TODO: багатопоточність сюди
-            # TODO: дуелі, турніри
             # TODO: refresh - видалення поточного міжчату, два рази надіслати вар, те ж саме з битвами
             BANNED_CLICK_WORDS = {
                 "в жертву": "Не буду я його різати, мені жаль",
@@ -847,6 +850,24 @@ async def message_handler(event, client_index: int):
                     'index':i,
                     }
                 )
+        elif message_args[1] in ["дуель", "duel", "d", "д"]:
+            try:
+                number_of_duels = int(message_args[2]) if len(message_args) >= 3 else 1
+                for i in bots_to_respond:
+                    results = await clients_array[i].inline_query(RANDOMBOT_ID, '')
+                    for _ in range(number_of_duels):
+                        await results[0].click(event.message.chat_id)
+            except Exception:
+                pass
+        elif message_args[1] in ["турнір", "tour", "т", "t"]:
+            try:
+                number_of_tournaments = int(message_args[2]) if len(message_args) >= 3 else 1
+                for i in bots_to_respond:
+                    results = await clients_array[i].inline_query(RANDOMBOT_ID, '&')
+                    for _ in range(number_of_tournaments):
+                        await results[2].click(event.message.chat_id)
+            except Exception:
+                pass
 
     else:
         user_ids = await get_first_bots_that_are_in_channel(client_index, event.message.chat_id)
@@ -855,21 +876,6 @@ async def message_handler(event, client_index: int):
             status_message = "Увімкнені боти:\n\n" + "\n".join(status_list)
             await clients_array[user_ids[0]].send_message(event.message.chat_id, status_message)
             return
-        
-        if message_recieved.text == ".тривога":
-            response = requests.get("http://alerts.com.ua/map.png")
-            
-            image = Image.open(BytesIO(response.content))
-            
-            png_image_path = "image.png"
-            image.save(png_image_path, "PNG")
-            
-            # Send the PNG image
-            await clients_array[0].send_file(
-                event.message.chat_id,
-                png_image_path,
-                background=False,
-            )
 
         elif message_recieved.text == ".guards":
             message_to_send = "Статус доступності /guard:\n"
@@ -1033,6 +1039,8 @@ async def message_handler(event, client_index: int):
             •бд (приклад: .1 бд) - закупити бойовий дух (5 пляшок горілки);
             •хп (приклад: .cl хп) - закупити хп (одна аптечка);
             •guard (приклад: .9-10 guard) - покликати гумконвой. Само перевірить, чи обраний генерал;
+            •дуель/duel/d/д к-ть_дуелей (приклад: .1 d 5) - дуелі рандомбота, кине 1 за замовчуванням;
+            •tour/турнір/t/т к-ть_турнірів (приклад: .3 t 8) - турніри раддомбота, кине 1 за замовчуванням;
             •/інші_команди (команди рандомбота) можна відправити одразу після /. Приклад: (.1 /i);
             \n🔍**Фільтри🔍**
             Щоб змінити фільтр, треба надіслати: .1 (назва фільтра) on/off/нічого. Якщо нічого не вказати, то зміниться з true на false і навпаки.
@@ -1104,7 +1112,6 @@ async def count_convoys_and_start_raid():
             }
         )
         if user_doc is not None:
-            chats_to_count_convoys_in = user_doc.get("auto_count_convoys", [])
             chat_to_observe = user_doc.get("convoys_observe_chat", None)
             if chat_to_observe is not None:
                 convoy_looted_msd = await clients_array[i].get_messages(chat_to_observe, search='Гумконвой розграбовано', from_user=RANDOMBOT_ID)
@@ -1149,7 +1156,6 @@ async def count_convoys_and_start_raid():
             
         #FIXME: якусь перевірку того, чи не висить рейд вже, і мб видалити попередній
         start_raid_arr = user_doc.get('auto_start_raid', [])
-        print(i, start_raid_arr)
         if start_raid_arr:
             for idx in start_raid_arr:
                 await clients_array[i].send_message(idx, '/raid')
@@ -1169,12 +1175,22 @@ async def start_clients():
         tasks.append(task)
 
     await asyncio.gather(*tasks)
+
     ME_ARR = [await client.get_me() for client in clients_array]
     print(f"{len(ME_ARR)} клієнтів ТГ .get_me() завантажено")
-    # tasks = []
-    # bg_task = asyncio.ensure_future(background_task())
-    # tasks.append(bg_task)
-    # await asyncio.gather(*tasks)
+
+    for i in range(NUMBER_OF_ACCOUNTS):
+        print(f"Завантажую переписки {ME_ARR[i].first_name}")
+        client = clients_array[i]
+        dialogs = await client.get_dialogs()
+        
+        for dialog in dialogs:
+            if isinstance(dialog.entity, InputPeerChat):
+                await client.get_participants(dialog.entity)
+    
+    print("Я зібрав інформацію про клієнтів")
+
+
     tasks = []
     convoy_startup = asyncio.ensure_future(count_convoys_and_start_raid())
     tasks.append(convoy_startup)
@@ -1185,9 +1201,6 @@ async def main():
     global ME_ARR
     await start_clients()
     await asyncio.gather(*[client.run_until_disconnected() for client in clients_array])
-    
-    task = asyncio.create_task(background_task())
-    await asyncio.gather(task)
 
 
 if __name__ == "__main__":
