@@ -1,4 +1,4 @@
-from imports import clients_array
+from ..constants_imports.imports import clients_array
 
 
 async def send_help_message(client_index: int, chat_id: int, message_id: int):

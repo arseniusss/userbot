@@ -1,7 +1,7 @@
 import asyncio
 import random
 from ..constants_imports.imports import clients_array, userbots_collection, RANDOMBOT_ID
-from helper_commands.emoji_handler import emoji_loot_map
+from ..helper_commands.emoji_handler import emoji_loot_map
 
 
 async def get_curr_chat_activities(client_index: int, chat_id: int, message_id: int):

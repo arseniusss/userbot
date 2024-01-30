@@ -5,7 +5,7 @@ COMMANDS_WITH_ONE_ANSWER_MESSAGE = ["status", "guards", "info", "chats", "stats"
 WINESRA_COMMANDS = ["addchat", "addadmin", "add_guard_chat"]
 
 
-async def get_first_bots_that_are_in_channel(client_index: int, ME_ARR: list, chat_id: str, limit: int = 1) -> list:
+async def get_first_bots_that_are_in_channel(client_index: int, ME_ARR: list, chat_id: int, limit: int = 1) -> list:
     try:
         participants_list = await clients_array[client_index].get_participants(chat_id)
 
@@ -25,14 +25,14 @@ async def get_first_bots_that_are_in_channel(client_index: int, ME_ARR: list, ch
         return []
 
 
-async def determine_clients_to_respond(event, client_index) -> list[int]:
+async def determine_clients_to_respond(event, ME_ARR: list, client_index: int) -> list[int]:
     message = event.message
     if not hasattr(event.message, 'text'):
         return []
     if len(event.message.text) <= 1:
         return []
     if message.text[1:] in COMMANDS_WITH_ONE_ANSWER_MESSAGE:
-        id = await get_first_bots_that_are_in_channel(client_index, event.message.chat_id)
+        id = await get_first_bots_that_are_in_channel(client_index, ME_ARR, event.message.chat_id)
         return list(id)
     if message.text[1].startswith('.clan') or message.text.startswith('.cl'):
         bots_to_respond = []

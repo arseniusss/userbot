@@ -1,11 +1,11 @@
 from ..constants_imports.imports import clients_array, userbots_collection, RANDOMBOT_ID
+from .shop_buy import buy_something_in_shop
 from telethon.tl.functions.messages import GetBotCallbackAnswerRequest
 import asyncio
 import random
 from datetime import timedelta
-from commands.shop_buy import buy_something_in_shop
 from typing import List
-from helper_commands.get_me_arr import get_me_arr
+from ..helper_commands.get_me_arr import get_me_arr
 from collections import defaultdict
 
 
@@ -157,7 +157,7 @@ async def filters_handler(event, client_index: int):
             else:
                 await clients_array[client_index].send_message(message_recieved.chat_id, '/raid', schedule=timedelta(seconds=3600 + random.randint(10, 20)))
         
-        if message_recieved.chat_id in user_doc.get("auto_clan_heal"):
+        if message_recieved.chat_id in user_doc.get("auto_clan_heal", []):
             await clients_array[client_index].send_message(message_recieved.chat_id, '.cl хп')
             await clients_array[client_index].send_message(message_recieved.chat_id, '.cl хп')
         if message_recieved.chat_id in user_doc.get("auto_loot", []):
@@ -310,4 +310,5 @@ async def filters_toggle_wrapper_with_response(bots_to_respond, message_args: li
             if len(value):
                 response_message+=f"\nбот{'и ' if len(value)!=1 else f'#'}{','.join(map(str, [v+1 for v in value]))} тепер {'НЕ ' if key=='off' else ''}{get_toggle_responses(toggle_parameter, len(value)==1)};" 
             
-            await clients_array[bots_to_respond[0]].send_message(chat_id, response_message, reply_to=message_id)
+    
+    await clients_array[bots_to_respond[0]].send_message(chat_id, response_message, reply_to=message_id)

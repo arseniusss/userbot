@@ -1,19 +1,19 @@
 from telethon import events
 from telethon.tl.types import InputPeerChat
 import asyncio
-from .src.constants_imports.constants import ID_DICT, WINESRA_ID
-from .src.constants_imports.imports import userbots_collection, clients_array, NUMBER_OF_ACCOUNTS
-from commands.filters_handler import filters_handler, display_chat_filters, filters_toggle_wrapper_with_response 
-from commands.shop_buy import buy_something_in_shop, BUY_OPTIONS
-from commands.guard_commands import guard, display_guard_chats, add_guard_chat, get_guard_status
-from commands.dm_fetch_info import display_rusaks, display_acc, display_rusak_classes
-from commands.general_chat_commands import get_curr_chat_activities, crash_battle
-from commands.click import click_on_message
-from commands.r_help import send_help_message
-from commands.admin_commands import add_admin, add_chat
-from commands.convoys_handler import observe_convoys, count_convoys_and_start_raid, convoys_encountered
-from helper_commands.determine_bots import determine_clients_to_respond, get_first_bots_that_are_in_channel
-from commands.randombot_inline_handler import duel_handler, tournament_handler
+from src.constants_imports.constants import ID_DICT, WINESRA_ID
+from src.constants_imports.imports import userbots_collection, clients_array, NUMBER_OF_ACCOUNTS
+from src.commands.filters_handler import filters_handler, display_chat_filters, filters_toggle_wrapper_with_response 
+from src.commands.shop_buy import buy_something_in_shop, BUY_OPTIONS
+from src.commands.guard_commands import guard, display_guard_chats, add_guard_chat, get_guard_status
+from src.commands.dm_fetch_info import display_rusaks, display_acc, display_rusak_classes
+from src.commands.general_chat_commands import get_curr_chat_activities, crash_battle
+from src.commands.click import click_on_message
+from src.commands.r_help import send_help_message
+from src.commands.admin_commands import add_admin, add_chat
+from src.commands.convoys_handler import observe_convoys, count_convoys_and_start_raid, convoys_encountered
+from src.helper_commands.determine_bots import determine_clients_to_respond, get_first_bots_that_are_in_channel
+from src.commands.randombot_inline_handler import duel_handler, tournament_handler
 
 
 ME_ARR = []
@@ -41,7 +41,7 @@ async def message_handler(event, client_index: int) -> None:
     if (user_doc and message_recieved.chat_id not in user_doc['chats_allowed'] and sender_id != WINESRA_ID):
         return
     
-    bots_to_respond = await determine_clients_to_respond(event, client_index)
+    bots_to_respond = await determine_clients_to_respond(event, ME_ARR, client_index)
     if client_index not in bots_to_respond:
         return
         

@@ -1,7 +1,7 @@
 from pymongo import MongoClient
 from os import getenv
 from dotenv import load_dotenv
-from constants import ID_DICT
+from .constants import ID_DICT
 from typing import List
 from telethon import TelegramClient
 from telethon.sessions import StringSession
@@ -15,8 +15,8 @@ _password = getenv("MONGO_PASSWORD")
 _database = getenv("MONGO_DATABASE")
 _collection = getenv("MONGO_COLLECTION")
 
-_mongo_client = MongoClient(host=_host, port=_port)
-# _mongo_client = MongoClient(host=_host, port=_port, username=_username, password=_password)
+#_mongo_client = MongoClient(host=_host, port=_port)
+_mongo_client = MongoClient(host=_host, port=_port, username=_username, password=_password)
 _user_db = _mongo_client[_database]
 userbots_collection = _user_db[_collection]
 NUMBER_OF_ACCOUNTS = len(ID_DICT.keys())

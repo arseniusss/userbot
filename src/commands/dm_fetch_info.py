@@ -1,6 +1,6 @@
 import asyncio
 import random
-from helper_commands.emoji_handler import rusak_stats_map
+from ..helper_commands.emoji_handler import rusak_stats_map
 from ..constants_imports.imports import clients_array, RANDOMBOT_ID
 from typing import List
 from collections import defaultdict

@@ -1,6 +1,5 @@
-from imports import clients_array
+from ..constants_imports.imports import clients_array, RANDOMBOT_ID
 from telethon.tl.functions.messages import GetBotCallbackAnswerRequest
-from constants import RANDOMBOT_ID
 
 
 BUY_OPTIONS = ["хп", "бд"] 

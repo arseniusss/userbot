@@ -2,12 +2,13 @@ FROM python:3.10
 
 WORKDIR /app
 
-COPY userbot_global.py .
-COPY userbot_settings.py .
+COPY src/ /app/src/
 COPY sessions.txt .
+COPY main.py .
+COPY .env .
 
 COPY requirements.txt requirements.txt
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["python", "userbot_global.py"]
+CMD ["python", "main.py"]
