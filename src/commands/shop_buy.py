@@ -3,7 +3,7 @@ from telethon.tl.functions.messages import GetBotCallbackAnswerRequest
 
 
 BUY_OPTIONS = ["хп", "бд"] 
-async def buy_something_in_shop(client_index: int, stuff_to_buy: str, quantity: int = 1):
+async def buy_something_in_shop(client_index: int, stuff_to_buy: str, quantity: int = 1) -> None:
     if stuff_to_buy not in BUY_OPTIONS:
         return False
     # TODO: додати ще щось для закупівлі

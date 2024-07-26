@@ -2,7 +2,7 @@ from ..constants_imports.imports import clients_array, RANDOMBOT_ID
 from typing import List
 
 
-async def duel_handler(bots_to_respond: List[int], message_args: list[str], chat_id: int):
+async def duel_handler(bots_to_respond: List[int], message_args: list[str], chat_id: int) -> None:
     try:
         number_of_duels = int(message_args[2]) if len(message_args) >= 3 else 1
         for i in bots_to_respond:
@@ -12,7 +12,7 @@ async def duel_handler(bots_to_respond: List[int], message_args: list[str], chat
     except Exception:
         pass
 
-async def tournament_handler(bots_to_respond: List[int], message_args: list[str], chat_id: int):
+async def tournament_handler(bots_to_respond: List[int], message_args: list[str], chat_id: int) -> None:
     try:
         number_of_tournaments = int(message_args[2]) if len(message_args) >= 3 else 1
         for i in bots_to_respond:

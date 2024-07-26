@@ -9,5 +9,3 @@ async def get_me_arr(clients_array):
     me_arr = await asyncio.gather(*tasks)
     ME_ARR = me_arr
     return me_arr
-
-get_me_arr(clients_array)

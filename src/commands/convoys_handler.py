@@ -17,7 +17,7 @@ async def observe_convoys(bots_to_respond: List[int], chat_id: int, message_id: 
                 },
                 {
                     "$set": {
-                        'convoys_observe_chat': chat_id,
+                        'observation.convoys_observe_chat': chat_id,
                     }   
                 }
             )
@@ -30,7 +30,7 @@ async def count_convoys_and_start_raid():
             }
         )
         if user_doc is not None:
-            chat_to_observe = user_doc.get("convoys_observe_chat", None)
+            chat_to_observe = user_doc.get("observation", {}).get("convoys_observe_chat", None)
             if chat_to_observe is not None:
                 convoy_looted_msd = await clients_array[i].get_messages(chat_to_observe, search='Гумконвой розграбовано', from_user=RANDOMBOT_ID)
                 for msg in convoy_looted_msd:
@@ -44,16 +44,16 @@ async def count_convoys_and_start_raid():
                     },
                     {
                         "$set": {
-                            "number_convoys": len(add_convoy_msgs),
+                            "observation.number_convoys": len(add_convoy_msgs),
                         }
                     }
                 )
                 # await clients_array[i].send_message(chat_to_observe, f"Я нарахував {len(add_convoy_msgs)} конвоїв, розграбували тут.", reply_to=convoy_id)
                 
-                last_raid_id = user_doc.get("last_raid_id", 0)
+                last_raid_id = user_doc.get("observation", {}).get('last_raid_id', {}).get(str(chat_to_observe), None)
                 raid_msgs = await clients_array[i].get_messages(chat_to_observe, search='Починається рейд...', from_user=RANDOMBOT_ID, min_id=last_raid_id)
                 
-                if len(raid_msgs) !=0:
+                if len(raid_msgs) != 0:
                     for mesg in raid_msgs:
                         last_raid_id = max(mesg.id, last_raid_id)
                 
@@ -64,7 +64,7 @@ async def count_convoys_and_start_raid():
                         },
                         {
                             "$set": {
-                                "last_raid_id": last_raid_id,
+                                f"observation.last_raid_id.{chat_to_observe}": last_raid_id,
                                 }
                             }
                         )
@@ -72,7 +72,7 @@ async def count_convoys_and_start_raid():
                 #await clients_array[i].send_message(chat_to_observe, f"Останній рейд був тут", reply_to=last_raid_id)
             
         #FIXME: якусь перевірку того, чи не висить рейд вже, і мб видалити попередній
-        start_raid_arr = user_doc.get('auto_start_raid', [])
+        start_raid_arr = user_doc.get('filters', {}).get('raid_autostart', [])
         if start_raid_arr:
             for idx in start_raid_arr:
                 await clients_array[i].send_message(idx, '/raid')
@@ -83,8 +83,8 @@ async def convoys_encountered(client_index: int, chat_id: int, message_id: int):
             'index': client_index,
         }
     )
-    chat_to_observe = user_doc.get("convoys_observe_chat", None)
-    number_convoys = user_doc.get("number_convoys", 0)
+    chat_to_observe = user_doc.get("observation", {}).get('convoys_observe_chat', None)
+    number_convoys = user_doc.get("observation", {}).get('number_convoys', 0)
     convoy_looted_msg = await clients_array[client_index].get_messages(chat_to_observe, search='Гумконвой розграбовано', from_user=RANDOMBOT_ID)
     
     id = convoy_looted_msg[0].id

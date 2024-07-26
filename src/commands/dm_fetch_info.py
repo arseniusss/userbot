@@ -7,7 +7,7 @@ from collections import defaultdict
 
 
 async def display_acc(bots_to_respond: List[int], ME_ARR: List, chat_id: int, message_id: int):
-    message_to_send = "💵📦🧂🌀🌟Стати акаунтів русаків:\n"
+    message_to_send = "💵📦🧂🌀🌟Стати аккаунтів русаків:\n"
     total_dict = {}
     async def get_acc_info(client_index: int) -> dict[str, int]:
         await clients_array[client_index].send_message(RANDOMBOT_ID, '/account')
@@ -52,13 +52,14 @@ async def display_rusaks(bots_to_respond: list[int], ME_ARR: list, chat_id: int,
         classes_dict[client_index] = '✖️'
         await asyncio.sleep(0.5)
         random_messages = await clients_array[client_index].get_messages(RANDOMBOT_ID, from_user=RANDOMBOT_ID, search="Твій русак", limit=1)
-        for message in random_messages:
-            index_of_class = message.text.find(" Клас:")
-            if index_of_class != -1:
-                lines = message.text.split('\n')
-                classes_dict[client_index] = lines[7][:str(lines[7]).find(" ")]
-            stats = rusak_stats_map(message.text)
-            return stats
+        message = random_messages[0]
+        
+        index_of_class = message.text.find(" Клас:")
+        if index_of_class != -1:
+            lines = message.text.split('\n')
+            classes_dict[client_index] = lines[7][:str(lines[7]).find(" ")]
+        stats = rusak_stats_map(message.text)
+        return stats
 
     tasks = []
     indices = []
@@ -88,8 +89,6 @@ async def display_rusak_classes(bots_to_respond: list[int], ME_ARR: list, chat_i
         await asyncio.sleep(0.4)
         random_messages = await clients_array[i].get_messages(RANDOMBOT_ID, from_user=RANDOMBOT_ID, search="Твій русак", limit=1)
         for message in random_messages:
-            if "🐒 Твій русак:" not in message.text:
-                continue
             index_of_class = message.text.find(" Клас:")
             if index_of_class != -1:
                 lines = message.text.split('\n')
@@ -114,4 +113,74 @@ async def display_rusak_classes(bots_to_respond: list[int], ME_ARR: list, chat_i
     await asyncio.sleep(0.5)
     await clients_array[bots_to_respond[0]].send_message(chat_id, response_message, reply_to=message_id)
 
-#TODO: /i
+
+async def display_inventory(bots_to_respond: list[int], ME_ARR: list, chat_id: int, message_id: int):
+    message_to_send = "🗡🛡🧪🎩Інвентарі аккаунтів русаків:\n"
+    inventory_dict = defaultdict(str)
+    async def get_inv_info(client_index: int) -> dict[str, int]:
+        await clients_array[client_index].send_message(RANDOMBOT_ID, '/i')
+        await asyncio.sleep(0.4)
+        random_messages = await clients_array[client_index].get_messages(RANDOMBOT_ID, from_user=RANDOMBOT_ID, search="Шапка:")
+        
+        message = random_messages[0]
+        lines = message.text.split("\n")
+        i = 0
+        emoji_list = ['🗡', '🛡', '🧪', '🎩']
+        items_processed = 0
+        while i < len(lines):
+            line = lines[i]
+            item = line[line.find(': ')+2:]
+            if item == '[Порожньо]':
+                strength = ''
+                i+=1
+            else:
+                strength = lines[i+1][lines[i+1].find(": ")+2:]
+                i+=2
+            inventory_dict[client_index] += f"{emoji_list[items_processed]}{item}({strength}); "
+            items_processed += 1
+        
+    tasks = []
+    for i in bots_to_respond:
+        task = asyncio.create_task(get_inv_info(i))
+        tasks.append(task)
+    
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    for i in bots_to_respond:
+        message_to_send+=f"\n{ME_ARR[i].first_name}({i+1}): {inventory_dict[i]}"
+
+    await clients_array[bots_to_respond[0]].send_message(chat_id, message_to_send, reply_to=message_id)
+
+
+async def display_status(bots_to_respond: list[int], ME_ARR: list, chat_id: int, message_id: int):
+    message_to_send = "🟥🟩Стасус аккаунтів русаків:\n"
+    inventory_dict = defaultdict(str)
+    async def get_status_info(client_index: int) -> dict[str, int]:
+        await clients_array[client_index].send_message(RANDOMBOT_ID, '/status')
+        await asyncio.sleep(0.4)
+        random_messages = await clients_array[client_index].get_messages(RANDOMBOT_ID, from_user=RANDOMBOT_ID, search="/daily")
+        
+        message = random_messages[0]
+        lines = message.text.split("\n")
+        for i in range(len(lines)):
+            line = lines[i]
+            if not ('🟥' in line or '🟩' in line or 'Дуелі' in line):
+                continue
+
+            if 'Дуелі' not in line:
+                inventory_dict[client_index] += f"{line} "
+            else:
+                inventory_dict[client_index] += f";⌛️дуелі: {line[line.find(': ')+2:line.find('/')]};"
+            
+        
+    tasks = []
+    for i in bots_to_respond:
+        task = asyncio.create_task(get_status_info(i))
+        tasks.append(task)
+    
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    for i in bots_to_respond:
+        message_to_send+=f"\n{ME_ARR[i].first_name}({i+1}): {inventory_dict[i]}"
+
+    await clients_array[bots_to_respond[0]].send_message(chat_id, message_to_send, reply_to=message_id, link_preview=False, clear_draft=True)

@@ -5,7 +5,7 @@ COMMANDS_WITH_ONE_ANSWER_MESSAGE = ["status", "guards", "info", "chats", "stats"
 WINESRA_COMMANDS = ["addchat", "addadmin", "add_guard_chat"]
 
 
-async def get_first_bots_that_are_in_channel(client_index: int, ME_ARR: list, chat_id: int, limit: int = 1) -> list:
+async def get_first_bots_that_are_in_channel(client_index: int, ME_ARR: list, chat_id: int, limit: int = 1) -> list[int]:
     try:
         participants_list = await clients_array[client_index].get_participants(chat_id)
 

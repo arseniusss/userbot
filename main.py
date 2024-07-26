@@ -3,10 +3,10 @@ from telethon.tl.types import InputPeerChat
 import asyncio
 from src.constants_imports.constants import ID_DICT, WINESRA_ID
 from src.constants_imports.imports import userbots_collection, clients_array, NUMBER_OF_ACCOUNTS
-from src.commands.filters_handler import filters_handler, display_chat_filters, filters_toggle_wrapper_with_response 
+from src.commands.filters_handler import filters_handler, display_chat_filters, filters_toggle_wrapper_with_response, UserbotFilterManager 
 from src.commands.shop_buy import buy_something_in_shop, BUY_OPTIONS
 from src.commands.guard_commands import guard, display_guard_chats, add_guard_chat, get_guard_status
-from src.commands.dm_fetch_info import display_rusaks, display_acc, display_rusak_classes
+from src.commands.dm_fetch_info import display_rusaks, display_acc, display_rusak_classes, display_inventory, display_status
 from src.commands.general_chat_commands import get_curr_chat_activities, crash_battle
 from src.commands.click import click_on_message
 from src.commands.r_help import send_help_message
@@ -18,7 +18,7 @@ from src.commands.randombot_inline_handler import duel_handler, tournament_handl
 
 ME_ARR = []
 
-async def message_handler(event, client_index: int) -> None:
+async def message_handler(event: events.NewMessage, client_index: int) -> None:
     global COMMANDS_WITH_ONE_ANSWER_MESSAGE, ME_ARR, WINESRA_ID
     message_recieved = event.message
     await filters_handler(event, client_index)
@@ -51,12 +51,13 @@ async def message_handler(event, client_index: int) -> None:
             return
         if str(message_args[1]).startswith("/"):
             string_to_send = ' '.join(message_args[1:])
-            banned_commands = ['/openpack', 'donate_shop']
+            banned_commands = ['openpack', 'donate_shop']
             if message_args[1] in banned_commands:
                 await clients_array[bots_to_respond[0]].send_message(message_recieved.chat_id, f"іДі нахуй, я жадібний", reply_to=message_recieved.id)
                 return
             for i in bots_to_respond:
                 await clients_array[i].send_message(message_recieved.chat_id, string_to_send)
+
         if message_args[1] in BUY_OPTIONS:
             tasks = []
             for i in bots_to_respond:
@@ -67,9 +68,19 @@ async def message_handler(event, client_index: int) -> None:
         if message_args[1] in ["rusak", "русак", "r", 'р']: 
             # TODO: параметр -2 для другого русака/другого класу
             await display_rusaks(bots_to_respond, ME_ARR, event.message.chat_id, event.message.id)
+            return
 
         if message_args[1] in ["account", "акк", 'acc', 'а', 'a']:
             await display_acc(bots_to_respond, ME_ARR, event.message.chat_id, event.message.id)
+            return
+
+        if message_args[1] in ["i", "inv", "inventory", "і", "інв", "інвентар"]:
+            await display_inventory(bots_to_respond, ME_ARR, event.message.chat_id, event.message.id)
+            return
+        
+        if message_args[1] in ["status", "s", "статус", "c"]:
+            await display_status(bots_to_respond, ME_ARR, event.message.chat_id, event.message.id)
+            return
 
         elif message_args[1] == "observe_convoys":
             await observe_convoys(bots_to_respond, event.message.chat_id, event.message.id)
@@ -91,11 +102,10 @@ async def message_handler(event, client_index: int) -> None:
         elif message_args[1] == "class":
             await display_rusak_classes(bots_to_respond, ME_ARR, event.message.chat_od, event.messsage.id)
         
-        elif message_args[1] in ["war", "battle", "loot", "start_war", "start_battle", "raid", "start_raid", "battle_sleep", "count_convoys", "makima_mode", "convoys_limit"]:
+        elif UserbotFilterManager.get_filter_setting(message_args[1]):
             await filters_toggle_wrapper_with_response(bots_to_respond, message_args, event.message.chat_id, event.message.id)
         
         elif message_args[1] in ["filters", "фільтри", "f", 'ф']:
-            #TODO: якийсь нормальний /i
             #TODO: admins
             #TODO: норм оформлення, щоб автоматично викликалось тільки для .cl
             await display_chat_filters(event.message.chat_id, bots_to_respond)
@@ -106,6 +116,7 @@ async def message_handler(event, client_index: int) -> None:
 
         elif message_args[1] in ["дуель", "duel", "d", "д"]:
             await duel_handler(bots_to_respond, message_args, event.message.chat_id)
+
         elif message_args[1] in ["турнір", "tour", "т", "t"]:
             await tournament_handler(bots_to_respond, message_args, event.message.chat_id)
 
@@ -140,14 +151,14 @@ async def message_handler(event, client_index: int) -> None:
                     'index': client_index,
                 }
             )
-            last_raid = user_doc.get('last_raid_id', None)
+            last_raid = user_doc.get('observation', {}).get("last_raid_id", {}).get(str(message_recieved.chat_id))
             await clients_array[user_ids[0]].send_message(event.message.chat_id, "Останній рейд був тут", reply_to=last_raid)
         elif message_recieved.text in [".help", ".h", "хелп", "допомога", "домопожіть"]:
             await send_help_message(bots_to_respond[0], event.message.chat_id, event.message.id)
 
         elif message_recieved.text in ["конвой", "камвой", ".convoy"]:
             await convoys_encountered(bots_to_respond[0], event.message.chat_id, event.message.id)
-
+              
 
 async def start_clients():
     global ME_ARR

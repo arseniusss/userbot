@@ -1,8 +1,9 @@
 import emoji
 import re
+from typing import Dict
 
 
-def emoji_loot_map(text: str) -> dict[str, int]:
+def emoji_loot_map(text: str) -> Dict[str, int]:
     # TODO: спробувати переробити ці методи в 1
     emojis = list(emoji.emoji_list(text[text.find('\n'):]))
     emoji_list =  [e['emoji'] for e in emojis]
@@ -20,7 +21,7 @@ def emoji_loot_map(text: str) -> dict[str, int]:
                         map_of_emoji_loot[my_emoji] = int(match.group())
     if len(map_of_emoji_loot.keys()) == 0:
         map_of_emoji_loot = {
-            'нічого корисного': ""
+            'нічого корисного': 0,
         }
 
     return map_of_emoji_loot
@@ -28,7 +29,7 @@ def emoji_loot_map(text: str) -> dict[str, int]:
 
 RUSAK_CLASSES_EMOJI = ["🤙","🧰","🔮","🗿","🪖","👮","🤡","📟","⛑","🚬","🚕","🎖",]
 
-def rusak_stats_map(text: str) -> dict[str, int]:
+def rusak_stats_map(text: str) -> Dict[str, int]:
     emojis = list(emoji.emoji_list(text))
     emoji_list =  [e['emoji'] for e in emojis]
     rusak_stats = {}
