@@ -54,6 +54,9 @@ class UserbotFilterManager:
             UserbotFilterSetting("packs_lower_bound", FilterSettingEnum.LOOT, aliases=["packs_lower"], value_type=FilterValueType.INT),
             UserbotFilterSetting("packs_upper_bound", FilterSettingEnum.LOOT, aliases=["packs_upper"], value_type=FilterValueType.INT),
             UserbotFilterSetting("morning_convoy", FilterSettingEnum.FILTERS, aliases=[], value_type=FilterValueType.LIST),
+            UserbotFilterSetting("observe_battles", FilterSettingEnum.OBSERBATION, aliases=[], value_type=FilterValueType.LIST),
+            UserbotFilterSetting("observe_raids", FilterSettingEnum.OBSERBATION, aliases=[], value_type=FilterValueType.LIST),
+            UserbotFilterSetting("pre_makima_sleep", FilterSettingEnum.SLEEP, aliases=['makima_sleep'], value_type=FilterValueType.DICT_NUM),
         ]
     def __init__(self):
         pass
@@ -108,12 +111,13 @@ async def filters_handler(event, client_index: int):
     if "Додатковий гумконвой вже в дорозі!" in message_received.text and message_received.chat_id == user_doc.get('observation', {}).get('convoys_observe_chat'):
         try:
             convoy_limit = user_doc.get("filters", {}).get('convoys_limit', 2)
-            current_convoys = user_doc.get("filters", {}).get('number_convoys', 0)
+            current_convoys = user_doc.get("observation", {}).get('number_convoys', 0)
             snatch_message_id = user_doc.get("observation", {}).get('last_raid_id', {}).get(str(message_received.chat_id), 1)
             chat_to_observe = user_doc.get("observation", {}).get('convoys_observe_chat')
-
+            sleep_time = user_doc.get("sleep", {}).get('pre_makima_sleep', {}).get(str(message_received.chat_id), 0.001)
             if current_convoys + 1 >= convoy_limit and message_received.chat_id in user_doc.get("filters", {}).get('makima_mode', []):                          
                 try:
+                    await asyncio.sleep(sleep_time)
                     await clients_array[client_index](GetBotCallbackAnswerRequest(
                         chat_to_observe,
                         snatch_message_id,
@@ -121,7 +125,6 @@ async def filters_handler(event, client_index: int):
                     ))
                 except:
                     pass
-                await clients_array[client_index].send_message(message_received.chat_id, "Я намагався зайти в цей рейд", reply_to=snatch_message_id)
        
             userbots_collection.find_one_and_update(
                 {'index': client_index},
@@ -148,7 +151,7 @@ async def filters_handler(event, client_index: int):
                 for row in message_received.reply_markup.rows:
                     for button in row.buttons:
                         if "міжчатовий бій" in button.text:                       
-                            sleep_time = user_doc.get("sleep", {}).get('pre_war_sleep', 0.2 * client_index + random.random())
+                            sleep_time = user_doc.get("sleep", {}).get('pre_war_sleep', {}).get(str(message_received.chat_id), 0.2 * client_index + random.random())
                             await asyncio.sleep(sleep_time)
                             try:
                                 await clients_array[client_index](GetBotCallbackAnswerRequest(
@@ -158,33 +161,36 @@ async def filters_handler(event, client_index: int):
                                 ))
                             except:
                                 pass
-                            return
         except:
             pass
+        return
     
     if "Починається битва" in message_received.text:
-        try:
-            if message_received.reply_markup and hasattr(message_received.reply_markup, 'rows') and message_received.chat_id in user_doc.get('filters', {}).get('battle_join', []):
-                sleep = user_doc.get("sleep", {}).get('pre_battle_sleep', 0.7 + 0.2 * client_index + random.random())
-                await asyncio.sleep(sleep + random.random() * 0.4)
+        if message_received.reply_markup and hasattr(message_received.reply_markup, 'rows') and message_received.chat_id in user_doc.get('filters', {}).get('battle_join', []):
+            sleep_time = user_doc.get("sleep", {}).get('pre_battle_sleep', {}).get(str(message_received.chat_id), 0.2 * client_index + random.random())
+            await asyncio.sleep(sleep_time)
+            try:
                 await clients_array[client_index](GetBotCallbackAnswerRequest(
                     message_received.chat_id,
                     message_received.id,
                     data='join'
                 ))
-                return
-        except:
-            pass
-        userbots_collection.find_one_and_update(
-            {"index": client_index},
-            {"$set": {f"observation.last_battle_id.{message_received.chat_id}": message_received.id}}
-        )
+            except:
+                pass
+
+        if message_received.chat_id in user_doc.get('observation', {}).get('observe_battle', []):
+            print(client_index, 'updated_battle_id')
+            userbots_collection.find_one_and_update(
+                {"index": client_index},
+                {"$set": {f"observation.last_battle_id.{message_received.chat_id}": message_received.id}}
+            )
+        return
     
     if "Починається рейд" in message_received.text:
         try:
             if message_received.chat_id in user_doc.get('filters', {}).get('raid_join', []) and message_received.reply_markup and hasattr(message_received.reply_markup, 'rows'):
-                sleep = user_doc.get("sleep", {}).get('pre_raid_sleep', 0.7 + 0.2 * client_index + random.random())
-                await asyncio.sleep(sleep)
+                sleep_time = user_doc.get("sleep", {}).get('pre_raid_sleep', {}).get(str(message_received.chat_id), 0.2 * client_index + random.random())
+                await asyncio.sleep(sleep_time)
                 await clients_array[client_index](GetBotCallbackAnswerRequest(
                     message_received.chat_id,
                     message_received.id,
